@@ -1,120 +1,229 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace classTestingGrounds
 {
-    public enum questionType { textBox, checkBox, radioButton }
-    internal class Program
+    enum questionType { textBox, checkBox, radioButton }
+    struct QuizResults
     {
-        class Answer
+        public Grade FinalGrade { get; set; }
+        public int TotalScore { get; set; }
+        public int CorrectAnswersCount { get; set; }
+        public int IncorrectAnswersCount { get; set; }
+        public int TotalPenalty { get; set; }
+    }
+    class Answer
+    {
+        public string Content { get; set; } = string.Empty;
+        public int Score { get; set; }
+        public bool IsTrue { get; set; }
+        public bool IsUserSelected { get; set; } = false;
+        public virtual int Award
         {
-            public string Content { get; set; }
-            public int Score { get; set; }
-            public bool IsTrue {  get; set; }
-            public virtual int Award
+            get
             {
-                get
-                {
-                    return Score > 0 ? Score : 0;
-                }
-            }
-            public virtual int Penalty
-            {
-                get
-                {
-                    return Score < 0 ? Math.Abs(Score) : 0;
-                }
+                return Score > 0 ? Score : 0;
             }
         }
-        class Question
+        public virtual int Penalty
         {
-            public string Content { get; set; }
-            public Answer[] Answers { get; set; }
-            public virtual int Score
+            get
             {
-                get
-                {
-                    return Answers?.Sum(answer => answer.Score) ?? 0;
-                }
-            }
-            public virtual questionType QuestionType
-            {
-                get; set;
-                //get
-                //{
-                //    if (this.Answers.Length == 0) { return questionType.textBox; }
-                //    else
-                //    {
-                //        int trueAnswerCount = 0;
-                //        foreach (Answer answer in Answers) { if (answer.IsTrue) { trueAnswerCount++; } }
-                        //If there are only true answers, define as textBox
-                //        if (this.Answers.Length == trueAnswerCount) { return questionType.textBox; }
-                        //If there is only one true answer, define as radioButton
-                //        else if (trueAnswerCount == 1) { return questionType.radioButton; }
-                        //If there are multiple correct answers with any incorrect ones, define as checkBox
-                //        else { return questionType.checkBox; }
-                //    }
+                return Score < 0 ? Math.Abs(Score) : 0;
             }
         }
-        class Grade
+    }
+    class Question
+    {
+        public string Content { get; set; } = string.Empty;
+        public Answer[] Answers { get; set; }
+        public questionType QuestionType
         {
-            public string Title { get; set; }
-            public int MinScore { get; set; }
-            public int MinCorrectAnswers { get; set; }
-            public int FailPenalty { get; set; } //Penalty points to fail the grade
-            public int FailIncorrectAnswers { get; set; } //Number of wrong answers to fail the grade
-            public bool IsPassingGrade {  get; set; }
+            get; set;
+            /* Old virtual method, replaced with static declaration for flexibility, kept for reference only
+            get
+            {
+                if (this.Answers.Length == 0) { return questionType.textBox; }
+                else
+                {
+                    int trueAnswerCount = 0;
+                    foreach (Answer answer in Answers) { if (answer.IsTrue) { trueAnswerCount++; } }
+            If there are only true answers, define as textBox
+                    if (this.Answers.Length == trueAnswerCount) { return questionType.textBox; }
+            If there is only one true answer, define as radioButton
+                    else if (trueAnswerCount == 1) { return questionType.radioButton; }
+            If there are multiple correct answers with any incorrect ones, define as checkBox
+                    else { return questionType.checkBox; }
+                }
+            */
         }
 
-        class Questionnaire
+        //Fetching Question Score, Award or Penalty will calculate total score applied based on IsUserSelected flag
+        public virtual int Score
         {
-            public Question[] Questions { get; set; }
-            public Grade[] Grades { get; set; }
-            public int DefaultAward { get; set; } = 1;
-            public int DefaultPenalty { get; set; } = 0;
-            public void SetDefaultPercentageGrades()
+            get
             {
-                int maxPossibleScore = 0;
-                int maxPossibleCorrectAnswers = 0;
-
-                if (Questions != null)
+                if (Answers == null) return 0;
+                else
                 {
-                    foreach (var question in Questions)
+                    int totalScore = 0;
+                    switch (this.QuestionType)
                     {
-                        if (question.Answers != null)
-                        {
-                            // For each question, sum up the scores of its true answers for max possible score.
-                            // For text box questions, assume the 'IsTrue' answer is the only one counted towards score.
-                            if (question.QuestionType == questionType.textBox)
+                        case questionType.textBox:
                             {
-                                var trueAnswer = question.Answers.FirstOrDefault(a => a.IsTrue);
-                                if (trueAnswer != null)
+                                var selectedTbAnswer = Answers.FirstOrDefault(a => a.IsUserSelected);
+                                //Return score value, including negative points, if such answer exists (specifically penalized options)
+                                if (selectedTbAnswer != null) { totalScore += selectedTbAnswer.Score; break; }
+                            }
+                            break;
+                        case questionType.radioButton:
+                            {
+                                var selectedRbAnswer = Answers.FirstOrDefault(a => a.IsUserSelected);
+                                if (selectedRbAnswer != null && selectedRbAnswer.IsTrue) { totalScore += selectedRbAnswer.Score; break; }
+                            }
+                            break;
+                        case questionType.checkBox:
+                            {
+                                bool voidAward = false; //Flag for voiding award score if incorrect answers are selected
+                                foreach (var answer in Answers)
                                 {
-                                    maxPossibleScore += trueAnswer.Score;
-                                    maxPossibleCorrectAnswers++;
+                                    if (answer.IsUserSelected && !answer.IsTrue) voidAward = true; break;
+                                }
+                                if (voidAward)
+                                {
+                                    foreach (var answer in Answers)
+                                    {
+                                        //Count only penalty if award is voided
+                                        if (!answer.IsTrue && answer.IsUserSelected) totalScore += answer.Score;
+                                    }
+                                }
+                                else
+                                {
+                                    foreach (var answer in Answers)
+                                    {
+                                        if (answer.IsUserSelected) totalScore += answer.Score;
+                                    }
                                 }
                             }
-                            else // For radioButton and checkBox
+                            break;
+                    }
+                    return totalScore;
+                }
+            }
+        }
+        public virtual int Award
+        {
+            get
+            {
+                int totalAward = this.Score;
+                if (totalAward > 0) return totalAward;
+                else return 0;
+            }
+        }
+        public virtual int Penalty
+        {
+            get
+            {
+                int totalPenalty = this.Score;
+                if (totalPenalty < 0) return Math.Abs(totalPenalty);
+                else return 0;
+            }
+        }
+        public virtual bool IsCorrect
+        {
+            get
+            {
+                if (Answers == null) return false;
+                else
+                {
+                    switch (this.QuestionType)
+                    {
+                        case questionType.textBox:
                             {
-                                maxPossibleScore += question.Answers.Where(a => a.IsTrue).Sum(a => a.Score);
-                                maxPossibleCorrectAnswers += question.Answers.Count(a => a.IsTrue);
+                                var selectedTbAnswer = Answers.FirstOrDefault(a => a.IsUserSelected);
+                                if (selectedTbAnswer != null && selectedTbAnswer.IsTrue) return true;
+                                else return false;
                             }
+                        case questionType.radioButton:
+                            {
+                                var selectedRbAnswer = Answers.FirstOrDefault(a => a.IsUserSelected);
+                                if (selectedRbAnswer != null && selectedRbAnswer.IsTrue) return true;
+                                else return false;
+                            }
+                        case questionType.checkBox:
+                            {
+                                bool voidAward = false; //Flag for voiding award score if incorrect answers are selected
+                                foreach (var answer in Answers)
+                                {
+                                    if (answer.IsUserSelected && !answer.IsTrue) voidAward = true; break;
+                                }
+                                return !voidAward;
+                            }
+                        default: return false;
+                    }
+                }
+            }
+        }
+    }
+    class Grade
+    {
+        public string Title { get; set; }
+        public int MinScore { get; set; }
+        public int MinCorrectAnswers { get; set; }
+        public int FailPenalty { get; set; } //Penalty points to fail the grade
+        public int FailIncorrectAnswers { get; set; } //Number of wrong answers to fail the grade
+        public bool IsPassingGrade { get; set; }
+    }
+    class Questionnaire
+    {
+        public Question[] Questions { get; set; }
+        public Grade[] Grades { get; set; }
+        public int DefaultAward { get; set; } = 1;
+        public int DefaultPenalty { get; set; } = 0;
+        public void SetDefaultPercentageGrades()
+        {
+            int maxPossibleScore = 0;
+            int maxPossibleCorrectAnswers = 0;
+
+            if (Questions != null)
+            {
+                foreach (var question in Questions)
+                {
+                    if (question.Answers != null)
+                    {
+                        // For each question, sum up the scores of its true answers for max possible score.
+                        // For text box questions, assume the 'IsTrue' answer is the only one counted towards score.
+                        if (question.QuestionType == questionType.textBox)
+                        {
+                            var trueAnswer = question.Answers.FirstOrDefault(a => a.IsTrue);
+                            if (trueAnswer != null)
+                            {
+                                maxPossibleScore += trueAnswer.Score;
+                                maxPossibleCorrectAnswers++;
+                            }
+                        }
+                        else // For radioButton and checkBox
+                        {
+                            maxPossibleScore += question.Answers.Where(a => a.IsTrue).Sum(a => a.Score);
+                            maxPossibleCorrectAnswers += question.Answers.Count(a => a.IsTrue);
                         }
                     }
                 }
+            }
 
-                int score90Percent = (int)Math.Ceiling(maxPossibleScore * 0.90);
-                int score75Percent = (int)Math.Ceiling(maxPossibleScore * 0.75);
-                int score60Percent = (int)Math.Ceiling(maxPossibleScore * 0.60);
+            int score90Percent = (int)Math.Ceiling(maxPossibleScore * 0.90);
+            int score75Percent = (int)Math.Ceiling(maxPossibleScore * 0.75);
+            int score60Percent = (int)Math.Ceiling(maxPossibleScore * 0.60);
 
-                int correct90Percent = (int)Math.Ceiling(maxPossibleCorrectAnswers * 0.90);
-                int correct75Percent = (int)Math.Ceiling(maxPossibleCorrectAnswers * 0.75);
-                int correct60Percent = (int)Math.Ceiling(maxPossibleCorrectAnswers * 0.60);
+            int correct90Percent = (int)Math.Ceiling(maxPossibleCorrectAnswers * 0.90);
+            int correct75Percent = (int)Math.Ceiling(maxPossibleCorrectAnswers * 0.75);
+            int correct60Percent = (int)Math.Ceiling(maxPossibleCorrectAnswers * 0.60);
 
-                List<Grade> defaultGrades = new List<Grade>
+            List<Grade> defaultGrades = new List<Grade>
             {
                 new Grade { Title = "5", MinScore = score90Percent, MinCorrectAnswers = correct90Percent, FailPenalty = maxPossibleScore, FailIncorrectAnswers = maxPossibleCorrectAnswers, IsPassingGrade = true },
                 new Grade { Title = "4", MinScore = score75Percent, MinCorrectAnswers = correct75Percent, FailPenalty = maxPossibleScore, FailIncorrectAnswers = maxPossibleCorrectAnswers, IsPassingGrade = true },
@@ -122,16 +231,141 @@ namespace classTestingGrounds
                 new Grade { Title = "2", MinScore = 0, MinCorrectAnswers = 0, FailPenalty = maxPossibleScore, FailIncorrectAnswers = maxPossibleCorrectAnswers, IsPassingGrade = false }
             };
 
-                // Assign the newly created grades, ordered by MinScore descending
-                Grades = defaultGrades.OrderByDescending(g => g.MinScore).ToArray();
+            // Assign the newly created grades, ordered by MinScore descending
+            Grades = defaultGrades.OrderByDescending(g => g.MinScore).ToArray();
 
-                Console.WriteLine($"\nDefault grades initialized based on Max Possible Score: {maxPossibleScore} and Max Possible Correct Answers: {maxPossibleCorrectAnswers}");
-                foreach (var grade in Grades)
-                {
-                    Console.WriteLine($"- {grade.Title}: MinScore={grade.MinScore}, MinCorrectAnswers={grade.MinCorrectAnswers}, FailPenalty={grade.FailPenalty}, FailIncorrectAnswers={grade.FailIncorrectAnswers}, Passing={grade.IsPassingGrade}");
-                }
+            Debug.WriteLine($"\nDefault grades initialized based on Max Possible Score: {maxPossibleScore} and Max Possible Correct Answers: {maxPossibleCorrectAnswers}");
+            foreach (var grade in Grades)
+            {
+                Debug.WriteLine($"- {grade.Title}: MinScore={grade.MinScore}, MinCorrectAnswers={grade.MinCorrectAnswers}, FailPenalty={grade.FailPenalty}, FailIncorrectAnswers={grade.FailIncorrectAnswers}, Passing={grade.IsPassingGrade}");
             }
         }
+        public QuizResults GradeUserAnswers()
+        {
+            int userTotalScore = 0;
+            int userCorrectAnswersCount = 0;
+            int userIncorrectAnswersCount = 0;
+            int userTotalPenalty = 0;
+
+            if (Questions == null)
+            {
+                return new QuizResults();
+            }
+
+            foreach (var question in Questions)
+            {
+                int questionScore = 0;
+                int questionCorrectCount = 0;
+                int questionIncorrectCount = 0;
+                int questionPenalty = 0;
+
+                if (question.Answers == null) continue;
+
+                switch (question.QuestionType)
+                {
+                    case questionType.radioButton:
+                        // For radio buttons, only one answer can be selected.
+                        var selectedRbAnswer = question.Answers.FirstOrDefault(a => a.IsUserSelected);
+                        if (selectedRbAnswer != null)
+                        {
+                            if (selectedRbAnswer.IsTrue)
+                            {
+                                questionScore += selectedRbAnswer.Score;
+                                questionCorrectCount++;
+                            }
+                            else
+                            {
+                                questionScore += selectedRbAnswer.Score; // Apply penalty if score is negative
+                                questionIncorrectCount++;
+                                questionPenalty += selectedRbAnswer.Penalty;
+                            }
+                        }
+                        break;
+
+                    case questionType.checkBox:
+                        // For checkboxes, iterate through all answers to check selections.
+                        foreach (var answer in question.Answers)
+                        {
+                            if (answer.IsUserSelected)
+                            {
+                                if (answer.IsTrue)
+                                {
+                                    questionScore += answer.Score;
+                                    questionCorrectCount++;
+                                }
+                                else
+                                {
+                                    questionScore += answer.Score;
+                                    questionIncorrectCount++;
+                                    questionPenalty += answer.Penalty;
+                                }
+                            }
+                        }
+
+                        // VOIDING LOGIC FOR CHECKBOXES: If any incorrect answers were chosen, void the award score.
+                        if (questionIncorrectCount > 0)
+                        {
+                            Debug.WriteLine($"  (Question: '{question.Content}') Incorrect answers were selected. Award score for this question is voided.");
+                            // If the questionScore is positive (meaning awards outweighed penalties), set it to 0.
+                            // If it's already negative (penalties outweighed awards), keep it negative.
+                            if (questionScore > 0)
+                            {
+                                questionScore = 0;
+                            }
+                            questionCorrectCount = 0; // No correct answers are counted towards the total if incorrect ones were selected
+                        }
+                        break;
+
+                    case questionType.textBox:
+                        var correctTextBoxAnswer = question.Answers.FirstOrDefault(a => a.IsTrue);
+                        var selectedTextBoxAnswer = question.Answers.FirstOrDefault(a => a.IsUserSelected);
+
+                        if (correctTextBoxAnswer != null && selectedTextBoxAnswer != null &&
+                            selectedTextBoxAnswer.Content.Equals(correctTextBoxAnswer.Content, StringComparison.OrdinalIgnoreCase))
+                        {
+                            questionScore += correctTextBoxAnswer.Score;
+                            questionCorrectCount++;
+                        }
+                        else
+                        {
+                            if (question.Answers.Any(a => a.Score < 0))
+                            {
+                                questionScore += question.Answers.Where(a => a.Score < 0).Sum(a => a.Score);
+                                questionPenalty += question.Answers.Where(a => a.Score < 0).Sum(a => a.Penalty);
+                            }
+                            questionIncorrectCount++;
+                        }
+                        break;
+                }
+                userTotalScore += questionScore;
+                userCorrectAnswersCount += questionCorrectCount;
+                userIncorrectAnswersCount += questionIncorrectCount;
+                userTotalPenalty += questionPenalty;
+            }
+
+            if (Grades != null)
+            {
+                Grade finalGrade = Grades.FirstOrDefault(g =>
+                userTotalScore >= g.MinScore &&
+                userCorrectAnswersCount >= g.MinCorrectAnswers &&
+                userTotalPenalty <= g.FailPenalty &&
+                userIncorrectAnswersCount <= g.FailIncorrectAnswers
+                );
+
+                return new QuizResults
+                {
+                    FinalGrade = finalGrade,
+                    TotalScore = userTotalScore,
+                    CorrectAnswersCount = userCorrectAnswersCount,
+                    IncorrectAnswersCount = userIncorrectAnswersCount,
+                    TotalPenalty = userTotalPenalty
+                };
+            }
+            else throw new ArgumentException("Grade cannot be null", nameof(Grades));
+        }
+    }
+    internal class Program
+    {
         static void Main(string[] args)
         {
             Console.WriteLine("\n--- Starting a New Questionnaire with 10 Questions ---");
@@ -145,7 +379,7 @@ namespace classTestingGrounds
                 Answers = new Answer[]
                 {
                     new Answer { Content = "Beijing", IsTrue = false, Score = 0 },
-                    new Answer { Content = "Tokyo", IsTrue = true, Score = 1 }, // DefaultAward
+                    new Answer { Content = "Tokyo", IsTrue = true, Score = 1 }, 
                     new Answer { Content = "Seoul", IsTrue = false, Score = 0 }
                 }
             };
@@ -157,9 +391,9 @@ namespace classTestingGrounds
                 Content = "Which of these are programming languages? (Select all that apply)",
                 Answers = new Answer[]
                 {
-                    new Answer { Content = "Python", IsTrue = true, Score = 1 }, // DefaultAward
+                    new Answer { Content = "Python", IsTrue = true, Score = 1 },
                     new Answer { Content = "HTML", IsTrue = false, Score = 0 },
-                    new Answer { Content = "Java", IsTrue = true, Score = 1 }, // DefaultAward
+                    new Answer { Content = "Java", IsTrue = true, Score = 1 },
                     new Answer { Content = "CSS", IsTrue = false, Score = 0 }
                 }
             };
@@ -169,7 +403,7 @@ namespace classTestingGrounds
             {
                 QuestionType = questionType.textBox,
                 Content = "What is the largest ocean on Earth?",
-                Answers = new Answer[] { new Answer { Content = "Pacific", IsTrue = true, Score = 1 } } // DefaultAward
+                Answers = new Answer[] { new Answer { Content = "Pacific", IsTrue = true, Score = 1 } }
             };
 
             // Q4: Radio Button
@@ -181,7 +415,7 @@ namespace classTestingGrounds
                 {
                     new Answer { Content = "5", IsTrue = false, Score = 0 },
                     new Answer { Content = "6", IsTrue = false, Score = 0 },
-                    new Answer { Content = "7", IsTrue = true, Score = 1 } // DefaultAward
+                    new Answer { Content = "7", IsTrue = true, Score = 1 } 
                 }
             };
 
@@ -192,9 +426,9 @@ namespace classTestingGrounds
                 Content = "Which of these are mammals? (Select all that apply)",
                 Answers = new Answer[]
                 {
-                    new Answer { Content = "Whale", IsTrue = true, Score = 1 }, // DefaultAward
+                    new Answer { Content = "Whale", IsTrue = true, Score = 1 },
                     new Answer { Content = "Shark", IsTrue = false, Score = 0 },
-                    new Answer { Content = "Bat", IsTrue = true, Score = 1 }, // DefaultAward
+                    new Answer { Content = "Bat", IsTrue = true, Score = 1 },
                     new Answer { Content = "Penguin", IsTrue = false, Score = 0 }
                 }
             };
@@ -214,7 +448,7 @@ namespace classTestingGrounds
                 Content = "Which planet is known as the 'Red Planet'?",
                 Answers = new Answer[]
                 {
-                    new Answer { Content = "Mars", IsTrue = true, Score = 1 }, // DefaultAward
+                    new Answer { Content = "Mars", IsTrue = true, Score = 1 },
                     new Answer { Content = "Jupiter", IsTrue = false, Score = 0 },
                     new Answer { Content = "Venus", IsTrue = false, Score = 0 }
                 }
@@ -227,10 +461,10 @@ namespace classTestingGrounds
                 Content = "Which of these are primary colors? (Select all that apply)",
                 Answers = new Answer[]
                 {
-                    new Answer { Content = "Red", IsTrue = true, Score = 1 }, // DefaultAward
+                    new Answer { Content = "Red", IsTrue = true, Score = 1 },
                     new Answer { Content = "Green", IsTrue = false, Score = 0 },
-                    new Answer { Content = "Blue", IsTrue = true, Score = 1 }, // DefaultAward
-                    new Answer { Content = "Yellow", IsTrue = true, Score = 1 } // DefaultAward
+                    new Answer { Content = "Blue", IsTrue = true, Score = 1 },
+                    new Answer { Content = "Yellow", IsTrue = true, Score = 1 }
                 }
             };
 
@@ -250,37 +484,35 @@ namespace classTestingGrounds
                 Answers = new Answer[]
                 {
                     new Answer { Content = "Yes", IsTrue = false, Score = 0 },
-                    new Answer { Content = "No", IsTrue = true, Score = 1 } // DefaultAward
+                    new Answer { Content = "No", IsTrue = true, Score = 1 }
                 }
             };
-
-
-            // Create a questionnaire with the 10 questions
             Questionnaire myQuiz = new Questionnaire
             {
                 Questions = new Question[] { q1, q2, q3, q4, q5, q6, q7, q8, q9, q10 },
-                // Grades array is initially empty or null, so SetDefaultPercentageGrades will populate it.
             };
 
-            // Set default grades based on the questions added to the questionnaire
             myQuiz.SetDefaultPercentageGrades();
-
-            int userTotalScore = 0;
-            int userCorrectAnswersCount = 0;
-            int userIncorrectAnswersCount = 0;
-            int userTotalPenalty = 0;
 
             Console.WriteLine("\n--- Begin Quiz ---\n");
 
+            // Loop through questions for user input
             for (int i = 0; i < myQuiz.Questions.Length; i++)
             {
                 Question currentQuestion = myQuiz.Questions[i];
                 Console.WriteLine($"\nQuestion {i + 1}: {currentQuestion.Content}");
 
+                // Reset IsUserSelected for all answers before getting input for the current question
+                if (currentQuestion.Answers != null)
+                {
+                    foreach (var answer in currentQuestion.Answers)
+                    {
+                        answer.IsUserSelected = false;
+                    }
+                }
                 switch (currentQuestion.QuestionType)
                 {
                     case questionType.radioButton:
-                        // Display answers with numbers
                         for (int j = 0; j < currentQuestion.Answers.Length; j++)
                         {
                             Console.WriteLine($"{j + 1}. {currentQuestion.Answers[j].Content}");
@@ -288,163 +520,88 @@ namespace classTestingGrounds
                         Console.Write("Enter your choice (number): ");
                         if (int.TryParse(Console.ReadLine(), out int choice) && choice >= 1 && choice <= currentQuestion.Answers.Length)
                         {
-                            Answer selectedAnswer = currentQuestion.Answers[choice - 1];
-                            if (selectedAnswer.IsTrue)
-                            {
-                                userTotalScore += selectedAnswer.Score;
-                                userCorrectAnswersCount++;
-                                Console.WriteLine("Correct!");
-                            }
-                            else
-                            {
-                                userTotalScore += selectedAnswer.Score; // Apply penalty if score is negative
-                                userIncorrectAnswersCount++;
-                                userTotalPenalty += selectedAnswer.Penalty;
-                                Console.WriteLine("Incorrect.");
-                            }
+                            currentQuestion.Answers[choice - 1].IsUserSelected = true;
                         }
                         else
                         {
-                            Console.WriteLine("Invalid input. No score awarded/deducted for this question.");
+                            Console.WriteLine("Invalid input. No answer selected for this question.");
                         }
                         break;
 
                     case questionType.checkBox:
-                        // Display answers with numbers
                         for (int j = 0; j < currentQuestion.Answers.Length; j++)
                         {
                             Console.WriteLine($"{j + 1}. {currentQuestion.Answers[j].Content}");
                         }
                         Console.Write("Enter your choices (comma-separated numbers, e.g., 1,3): ");
                         string input = Console.ReadLine();
-                        List<int> userChoices = new List<int>();
                         if (!string.IsNullOrWhiteSpace(input))
                         {
-                            userChoices = input.Split(',')
-                                               .Select(s => s.Trim())
-                                               .Where(s => int.TryParse(s, out _))
-                                               .Select(int.Parse)
-                                               .ToList();
-                        }
-
-                        int questionScore = 0;
-                        int questionCorrectCount = 0;
-                        int questionIncorrectCount = 0;
-                        int questionPenalty = 0;
-
-                        // Check user's selected answers
-                        foreach (int choiceNum in userChoices)
-                        {
-                            if (choiceNum >= 1 && choiceNum <= currentQuestion.Answers.Length)
+                            List<int> userChoices = input.Split(',')
+                                                         .Select(s => s.Trim())
+                                                         .Where(s => int.TryParse(s, out _))
+                                                         .Select(int.Parse)
+                                                         .ToList();
+                            foreach (int choiceNum in userChoices)
                             {
-                                Answer selectedAnswer = currentQuestion.Answers[choiceNum - 1];
-                                if (selectedAnswer.IsTrue)
+                                if (choiceNum >= 1 && choiceNum <= currentQuestion.Answers.Length)
                                 {
-                                    questionScore += selectedAnswer.Score;
-                                    questionCorrectCount++;
-                                }
-                                else
-                                {
-                                    questionScore += selectedAnswer.Score; // Apply penalty if score is negative
-                                    questionIncorrectCount++;
-                                    questionPenalty += selectedAnswer.Penalty;
+                                    currentQuestion.Answers[choiceNum - 1].IsUserSelected = true;
                                 }
                             }
-                        }
-
-                        // NEW LOGIC: Void award score if incorrect answers were chosen for checkbox questions
-                        if (questionIncorrectCount > 0)
-                        {
-                            Console.WriteLine("Incorrect answers were selected. Award score for this question is voided.");
-                            // If the questionScore is positive (meaning awards outweighed penalties), set it to 0.
-                            // If it's already negative (penalties outweighed awards), keep it negative.
-                            if (questionScore > 0)
-                            {
-                                questionScore = 0;
-                            }
-                            questionCorrectCount = 0; // No correct answers are counted towards the total if incorrect ones were selected
-                        }
-
-                        // Check for unselected true answers (missed correct answers)
-                        foreach (var answer in currentQuestion.Answers)
-                        {
-                            // If an 'IsTrue' answer was not selected by the user AND the question wasn't already voided for incorrect choices
-                            // (or if you want to still report missed correct answers even if voided)
-                            if (answer.IsTrue && !userChoices.Contains(Array.IndexOf(currentQuestion.Answers, answer) + 1))
-                            {
-                                Console.WriteLine($"Missed correct answer: {answer.Content}");
-                            }
-                        }
-
-                        if (questionCorrectCount > 0 || questionIncorrectCount > 0 || questionScore < 0) // Ensure score is added even if only penalties
-                        {
-                            userTotalScore += questionScore;
-                            userCorrectAnswersCount += questionCorrectCount;
-                            userIncorrectAnswersCount += questionIncorrectCount;
-                            userTotalPenalty += questionPenalty;
-                            Console.WriteLine($"Question score: {questionScore}");
                         }
                         else
                         {
-                            Console.WriteLine("No valid choices entered for this question.");
+                            Console.WriteLine("No choices entered for this question.");
                         }
                         break;
 
                     case questionType.textBox:
                         Console.Write("Your answer: ");
                         string userAnswerText = Console.ReadLine();
-                        // For textBox, we'll assume a single 'IsTrue' answer for comparison and scoring.
-                        if (currentQuestion.Answers != null && currentQuestion.Answers.Length > 0)
+                        // For text box, we'll ensure there's an Answer object to hold the user's input.
+                        // If there are no predefined answers, we create one.
+                        // If there are predefined answers (e.g., a correct one for comparison),
+                        // we add the user's input as a new selected answer.
+                        // The grading logic will then compare this selected answer's content.
+                        if (currentQuestion.Answers == null || !currentQuestion.Answers.Any(a => a.IsUserSelected))
                         {
-                            Answer correctAnswer = currentQuestion.Answers.FirstOrDefault(a => a.IsTrue);
-                            if (correctAnswer != null && userAnswerText.Trim().Equals(correctAnswer.Content, StringComparison.OrdinalIgnoreCase))
-                            {
-                                userTotalScore += correctAnswer.Score;
-                                userCorrectAnswersCount++;
-                                Console.WriteLine("Correct!");
-                            }
-                            else
-                            {
-                                Console.WriteLine("Incorrect or not matching expected answer.");
-                                // If a textBox has a penalty for incorrect text answers, apply it.
-                                if (currentQuestion.Answers.Any(a => a.Score < 0))
-                                {
-                                    userTotalScore += currentQuestion.Answers.Where(a => a.Score < 0).Sum(a => a.Score);
-                                    userTotalPenalty += currentQuestion.Answers.Where(a => a.Score < 0).Sum(a => a.Penalty);
-                                }
-                                userIncorrectAnswersCount++;
-                            }
+                            // If no answers or no user-selected answer yet, create one for user input
+                            currentQuestion.Answers = (currentQuestion.Answers ?? Array.Empty<Answer>())
+                                .Append(new Answer { Content = userAnswerText, IsUserSelected = true, Score = 0 })
+                                .ToArray();
                         }
                         else
                         {
-                            Console.WriteLine("No predefined answer for this text box question. Input recorded.");
+                            var existingSelected = currentQuestion.Answers.FirstOrDefault(a => a.IsUserSelected);
+                            if (existingSelected != null)
+                            {
+                                existingSelected.Content = userAnswerText;
+                            }
+                            else
+                            {
+                                currentQuestion.Answers = currentQuestion.Answers.Append(new Answer { Content = userAnswerText, IsUserSelected = true, Score = 0 }).ToArray();
+                            }
                         }
                         break;
                 }
-                Console.WriteLine($"Current Total Score: {userTotalScore}");
+                Console.WriteLine("This question Score is: ", Convert.ToString(currentQuestion.Score));
             }
 
             Console.WriteLine("\n--- Quiz Finished ---");
-            Console.WriteLine($"\nYour Final Score: {userTotalScore}");
-            Console.WriteLine($"Correct Answers: {userCorrectAnswersCount}");
-            Console.WriteLine($"Incorrect Answers: {userIncorrectAnswersCount}");
-            Console.WriteLine($"Total Penalty Applied: {userTotalPenalty}");
 
-            // Determine the final grade using the percentage-based grades
-            // Grades are already sorted descending by MinScore within SetDefaultPercentageGrades().
-            // We find the FIRST grade that the user meets ALL criteria for.
-            Grade finalGrade = myQuiz.Grades.FirstOrDefault(g =>
-                userTotalScore >= g.MinScore &&
-                userCorrectAnswersCount >= g.MinCorrectAnswers &&
-                userTotalPenalty <= g.FailPenalty &&
-                userIncorrectAnswersCount <= g.FailIncorrectAnswers
-            );
+            // Grade the user's answers using the Questionnaire's method
+            QuizResults results = myQuiz.GradeUserAnswers();
 
-            if (finalGrade != null)
+            Console.WriteLine($"\nYour Final Score: {results.TotalScore}");
+            Console.WriteLine($"Correct Answers: {results.CorrectAnswersCount}");
+            Console.WriteLine($"Incorrect Answers: {results.IncorrectAnswersCount}");
+            Console.WriteLine($"Total Penalty Applied: {results.TotalPenalty}");
+
+            if (results.FinalGrade != null)
             {
-                Console.WriteLine($"\nYour Grade: {finalGrade.Title}");
-                // The IsPassingGrade property is now correctly set in the Grade object itself.
-                if (finalGrade.IsPassingGrade)
+                Console.WriteLine($"\nYour Grade: {results.FinalGrade.Title}");
+                if (results.FinalGrade.IsPassingGrade)
                 {
                     Console.WriteLine("Congratulations! You passed the quiz.");
                 }
@@ -460,6 +617,7 @@ namespace classTestingGrounds
 
             Console.WriteLine("\nPress any key to exit.");
             Console.ReadKey();
+
         }
     }
 }
