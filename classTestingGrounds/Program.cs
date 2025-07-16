@@ -20,7 +20,7 @@ namespace classTestingGrounds
     {
         public string Content { get; set; } = string.Empty;
         public int Score { get; set; }
-        public bool IsTrue { get; set; }
+        public bool Correct { get; set; }
         public bool IsUserSelected { get; set; } = false;
         public virtual int Award
         {
@@ -51,7 +51,7 @@ namespace classTestingGrounds
                 else
                 {
                     int trueAnswerCount = 0;
-                    foreach (Answer answer in Answers) { if (answer.IsTrue) { trueAnswerCount++; } }
+                    foreach (Answer answer in Answers) { if (answer.Correct) { trueAnswerCount++; } }
             If there are only true answers, define as textBox
                     if (this.Answers.Length == trueAnswerCount) { return questionType.textBox; }
             If there is only one true answer, define as radioButton
@@ -83,7 +83,7 @@ namespace classTestingGrounds
                         case questionType.radioButton:
                             {
                                 var selectedRbAnswer = Answers.FirstOrDefault(a => a.IsUserSelected);
-                                if (selectedRbAnswer != null && selectedRbAnswer.IsTrue) { totalScore += selectedRbAnswer.Score; break; }
+                                if (selectedRbAnswer != null && selectedRbAnswer.Correct) { totalScore += selectedRbAnswer.Score; break; }
                             }
                             break;
                         case questionType.checkBox:
@@ -91,14 +91,17 @@ namespace classTestingGrounds
                                 bool voidAward = false; //Flag for voiding award score if incorrect answers are selected
                                 foreach (var answer in Answers)
                                 {
-                                    if (answer.IsUserSelected && !answer.IsTrue) voidAward = true; break;
+                                    if (answer.IsUserSelected && !answer.Correct)
+                                    {
+                                        voidAward = true; break;
+                                    }
                                 }
                                 if (voidAward)
                                 {
                                     foreach (var answer in Answers)
                                     {
                                         //Count only penalty if award is voided
-                                        if (!answer.IsTrue && answer.IsUserSelected) totalScore += answer.Score;
+                                        if (!answer.Correct && answer.IsUserSelected) totalScore += answer.Score;
                                     }
                                 }
                                 else
@@ -145,13 +148,13 @@ namespace classTestingGrounds
                         case questionType.textBox:
                             {
                                 var selectedTbAnswer = Answers.FirstOrDefault(a => a.IsUserSelected);
-                                if (selectedTbAnswer != null && selectedTbAnswer.IsTrue) return true;
+                                if (selectedTbAnswer != null && selectedTbAnswer.Correct) return true;
                                 else return false;
                             }
                         case questionType.radioButton:
                             {
                                 var selectedRbAnswer = Answers.FirstOrDefault(a => a.IsUserSelected);
-                                if (selectedRbAnswer != null && selectedRbAnswer.IsTrue) return true;
+                                if (selectedRbAnswer != null && selectedRbAnswer.Correct) return true;
                                 else return false;
                             }
                         case questionType.checkBox:
@@ -159,9 +162,12 @@ namespace classTestingGrounds
                                 bool voidAward = false; //Flag for voiding award score if incorrect answers are selected
                                 foreach (var answer in Answers)
                                 {
-                                    if (answer.IsUserSelected && !answer.IsTrue) voidAward = true; break;
+                                    if (answer.IsUserSelected && !answer.Correct)
+                                    {
+                                        voidAward = true; break;
+                                    }
                                 }
-                                return !voidAward;
+                                return Answers.Any(answer => answer.IsUserSelected && answer.Correct && !voidAward);
                             }
                         default: return false;
                     }
@@ -196,10 +202,10 @@ namespace classTestingGrounds
                     if (question.Answers != null)
                     {
                         // For each question, sum up the scores of its true answers for max possible score.
-                        // For text box questions, assume the 'IsTrue' answer is the only one counted towards score.
+                        // For text box questions, assume the 'Correct' answer is the only one counted towards score.
                         if (question.QuestionType == questionType.textBox)
                         {
-                            var trueAnswer = question.Answers.FirstOrDefault(a => a.IsTrue);
+                            var trueAnswer = question.Answers.FirstOrDefault(a => a.Correct);
                             if (trueAnswer != null)
                             {
                                 maxPossibleScore += trueAnswer.Score;
@@ -208,8 +214,8 @@ namespace classTestingGrounds
                         }
                         else // For radioButton and checkBox
                         {
-                            maxPossibleScore += question.Answers.Where(a => a.IsTrue).Sum(a => a.Score);
-                            maxPossibleCorrectAnswers += question.Answers.Count(a => a.IsTrue);
+                            maxPossibleScore += question.Answers.Where(a => a.Correct).Sum(a => a.Score);
+                            maxPossibleCorrectAnswers += question.Answers.Count(a => a.Correct);
                         }
                     }
                 }
@@ -268,7 +274,7 @@ namespace classTestingGrounds
                         var selectedRbAnswer = question.Answers.FirstOrDefault(a => a.IsUserSelected);
                         if (selectedRbAnswer != null)
                         {
-                            if (selectedRbAnswer.IsTrue)
+                            if (selectedRbAnswer.Correct)
                             {
                                 questionScore += selectedRbAnswer.Score;
                                 questionCorrectCount++;
@@ -288,7 +294,7 @@ namespace classTestingGrounds
                         {
                             if (answer.IsUserSelected)
                             {
-                                if (answer.IsTrue)
+                                if (answer.Correct)
                                 {
                                     questionScore += answer.Score;
                                     questionCorrectCount++;
@@ -317,7 +323,7 @@ namespace classTestingGrounds
                         break;
 
                     case questionType.textBox:
-                        var correctTextBoxAnswer = question.Answers.FirstOrDefault(a => a.IsTrue);
+                        var correctTextBoxAnswer = question.Answers.FirstOrDefault(a => a.Correct);
                         var selectedTextBoxAnswer = question.Answers.FirstOrDefault(a => a.IsUserSelected);
 
                         if (correctTextBoxAnswer != null && selectedTextBoxAnswer != null &&
@@ -378,9 +384,9 @@ namespace classTestingGrounds
                 Content = "What is the capital of Japan?",
                 Answers = new Answer[]
                 {
-                    new Answer { Content = "Beijing", IsTrue = false, Score = 0 },
-                    new Answer { Content = "Tokyo", IsTrue = true, Score = 1 }, 
-                    new Answer { Content = "Seoul", IsTrue = false, Score = 0 }
+                    new Answer { Content = "Beijing", Correct = false, Score = 0 },
+                    new Answer { Content = "Tokyo", Correct = true, Score = 1 },
+                    new Answer { Content = "Seoul", Correct = false, Score = 0 }
                 }
             };
 
@@ -391,10 +397,10 @@ namespace classTestingGrounds
                 Content = "Which of these are programming languages? (Select all that apply)",
                 Answers = new Answer[]
                 {
-                    new Answer { Content = "Python", IsTrue = true, Score = 1 },
-                    new Answer { Content = "HTML", IsTrue = false, Score = 0 },
-                    new Answer { Content = "Java", IsTrue = true, Score = 1 },
-                    new Answer { Content = "CSS", IsTrue = false, Score = 0 }
+                    new Answer { Content = "Python", Correct = true, Score = 1 },
+                    new Answer { Content = "HTML", Correct = false, Score = 0 },
+                    new Answer { Content = "Java", Correct = true, Score = 1 },
+                    new Answer { Content = "CSS", Correct = false, Score = 0 }
                 }
             };
 
@@ -403,7 +409,7 @@ namespace classTestingGrounds
             {
                 QuestionType = questionType.textBox,
                 Content = "What is the largest ocean on Earth?",
-                Answers = new Answer[] { new Answer { Content = "Pacific", IsTrue = true, Score = 1 } }
+                Answers = new Answer[] { new Answer { Content = "Pacific", Correct = true, Score = 1 } }
             };
 
             // Q4: Radio Button
@@ -413,9 +419,9 @@ namespace classTestingGrounds
                 Content = "How many continents are there?",
                 Answers = new Answer[]
                 {
-                    new Answer { Content = "5", IsTrue = false, Score = 0 },
-                    new Answer { Content = "6", IsTrue = false, Score = 0 },
-                    new Answer { Content = "7", IsTrue = true, Score = 1 } 
+                    new Answer { Content = "5", Correct = false, Score = 0 },
+                    new Answer { Content = "6", Correct = false, Score = 0 },
+                    new Answer { Content = "7", Correct = true, Score = 1 } 
                 }
             };
 
@@ -426,10 +432,10 @@ namespace classTestingGrounds
                 Content = "Which of these are mammals? (Select all that apply)",
                 Answers = new Answer[]
                 {
-                    new Answer { Content = "Whale", IsTrue = true, Score = 1 },
-                    new Answer { Content = "Shark", IsTrue = false, Score = 0 },
-                    new Answer { Content = "Bat", IsTrue = true, Score = 1 },
-                    new Answer { Content = "Penguin", IsTrue = false, Score = 0 }
+                    new Answer { Content = "Whale", Correct = true, Score = 1 },
+                    new Answer { Content = "Shark", Correct = false, Score = 0 },
+                    new Answer { Content = "Bat", Correct = true, Score = 1 },
+                    new Answer { Content = "Penguin", Correct = false, Score = 0 }
                 }
             };
 
@@ -438,7 +444,7 @@ namespace classTestingGrounds
             {
                 QuestionType = questionType.textBox,
                 Content = "What is the chemical symbol for water?",
-                Answers = new Answer[] { new Answer { Content = "H2O", IsTrue = true, Score = 1 } } // DefaultAward
+                Answers = new Answer[] { new Answer { Content = "H2O", Correct = true, Score = 1 } } // DefaultAward
             };
 
             // Q7: Radio Button
@@ -448,9 +454,9 @@ namespace classTestingGrounds
                 Content = "Which planet is known as the 'Red Planet'?",
                 Answers = new Answer[]
                 {
-                    new Answer { Content = "Mars", IsTrue = true, Score = 1 },
-                    new Answer { Content = "Jupiter", IsTrue = false, Score = 0 },
-                    new Answer { Content = "Venus", IsTrue = false, Score = 0 }
+                    new Answer { Content = "Mars", Correct = true, Score = 1 },
+                    new Answer { Content = "Jupiter", Correct = false, Score = 0 },
+                    new Answer { Content = "Venus", Correct = false, Score = 0 }
                 }
             };
 
@@ -461,10 +467,10 @@ namespace classTestingGrounds
                 Content = "Which of these are primary colors? (Select all that apply)",
                 Answers = new Answer[]
                 {
-                    new Answer { Content = "Red", IsTrue = true, Score = 1 },
-                    new Answer { Content = "Green", IsTrue = false, Score = 0 },
-                    new Answer { Content = "Blue", IsTrue = true, Score = 1 },
-                    new Answer { Content = "Yellow", IsTrue = true, Score = 1 }
+                    new Answer { Content = "Red", Correct = true, Score = 1 },
+                    new Answer { Content = "Green", Correct = false, Score = 0 },
+                    new Answer { Content = "Blue", Correct = true, Score = 1 },
+                    new Answer { Content = "Yellow", Correct = true, Score = 1 }
                 }
             };
 
@@ -473,7 +479,7 @@ namespace classTestingGrounds
             {
                 QuestionType = questionType.textBox,
                 Content = "What is the fastest land animal?",
-                Answers = new Answer[] { new Answer { Content = "Cheetah", IsTrue = true, Score = 1 } } // DefaultAward
+                Answers = new Answer[] { new Answer { Content = "Cheetah", Correct = true, Score = 1 } } // DefaultAward
             };
 
             // Q10: Radio Button
@@ -483,8 +489,8 @@ namespace classTestingGrounds
                 Content = "Is the Earth flat?",
                 Answers = new Answer[]
                 {
-                    new Answer { Content = "Yes", IsTrue = false, Score = 0 },
-                    new Answer { Content = "No", IsTrue = true, Score = 1 }
+                    new Answer { Content = "Yes", Correct = false, Score = 0 },
+                    new Answer { Content = "No", Correct = true, Score = 1 }
                 }
             };
             Questionnaire myQuiz = new Questionnaire
@@ -585,7 +591,10 @@ namespace classTestingGrounds
                         }
                         break;
                 }
-                Console.WriteLine("This question Score is: ", Convert.ToString(currentQuestion.Score));
+                Console.WriteLine("This question Score is: " + currentQuestion.Score);
+                Console.WriteLine("This question Award is: " + currentQuestion.Award);
+                Console.WriteLine("This question Penalty is: " + currentQuestion.Penalty);
+                Console.WriteLine("This question is: " + currentQuestion.IsCorrect);
             }
 
             Console.WriteLine("\n--- Quiz Finished ---");
